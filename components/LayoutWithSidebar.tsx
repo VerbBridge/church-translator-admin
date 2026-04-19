@@ -1,0 +1,48 @@
+"use client";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+export function LayoutWithSidebar({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  // Hide sidebar on /login and /watch (congregation view)
+  if (pathname === "/login" || pathname.startsWith("/watch")) {
+    return <>{children}</>;
+  }
+  return (
+    <div className="flex min-h-screen">
+      {/* Sidebar */}
+      <aside className="w-64 bg-gray-900 flex flex-col py-6 px-4">
+        <div className="mb-8">
+          <span className="font-bold text-lg tracking-tight text-white">Church Translator</span>
+        </div>
+        <nav className="flex flex-col gap-2">
+          {[
+            { href: "/", label: "Dashboard" },
+            { href: "/sessions", label: "Sessions" },
+            { href: "/songs", label: "Songs" },
+            { href: "/settings", label: "Settings" },
+          ].map(({ href, label }) => {
+            const isActive = href === "/" ? pathname === "/" : pathname.startsWith(href);
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={`rounded px-3 py-2 transition ${
+                  isActive
+                    ? "bg-gray-700 text-white font-semibold"
+                    : "text-gray-200 hover:bg-gray-800 hover:text-white"
+                }`}
+              >
+                {label}
+              </Link>
+            );
+          })}
+        </nav>
+        <div className="flex-1" />
+        <div className="text-xs text-gray-500 mt-8">Admin Dashboard</div>
+      </aside>
+      {/* Main content */}
+      <main className="flex-1 p-8">{children}</main>
+    </div>
+  );
+}

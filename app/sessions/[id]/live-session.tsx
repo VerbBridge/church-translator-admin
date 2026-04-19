@@ -1,0 +1,410 @@
+"use client";
+
+import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { QRCodeSVG } from "qrcode.react";
+import { TranslationClient } from "@/lib/translation-client";
+import { api } from "@/lib/api";
+import { useStore, type TranslationMessage } from "@/lib/store";
+
+interface BackendTranslation {
+  content_type?: 'speech' | 'scripture' | 'song';
+  source_text?: string;
+  target_text?: string;
+  confidence?: number;
+  timestamp?: string;
+  created_at?: string;
+}
+
+interface LiveSessionProps {
+  sessionId: string;
+  sessionName: string;
+  deviceId: string;
+  startedAt: string;
+  sourceLanguage: string;
+  targetLanguage: string;
+}
+
+const LANGUAGE_LABELS: Record<string, string> = {
+  es: "Spanish",
+  en: "English",
+};
+
+export function LiveSession({ sessionId, sessionName, deviceId, startedAt, sourceLanguage, targetLanguage }: LiveSessionProps) {
+  const router = useRouter();
+  const clientRef = useRef<TranslationClient | null>(null);
+
+  const [connected, setConnected] = useState(false);
+  const [streaming, setStreaming] = useState(false);
+  const [activeClients, setActiveClients] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [isStopping, setIsStopping] = useState(false);
+  const [isStartingAudio, setIsStartingAudio] = useState(false);
+
+  // Get translations from store instead of local state
+  const session = useStore((state) => state.sessions.find((s) => s.id === sessionId));
+  const translations = session?.translations || [];
+  const addTranslation = useStore((state) => state.addTranslation);
+  const setActiveSong = useStore((state) => state.setActiveSong);
+  const activeSong = session?.activeSong;
+
+  useEffect(() => {
+    // Clear any previous errors when component mounts
+    setError(null);
+
+    // Load historical translations from database
+    const loadHistoricalTranslations = async () => {
+      try {
+        console.log('[LiveSession] Loading historical translations from database...');
+        const historicalTranslations = await api.getSessionTranslations(sessionId);
+        console.log('[LiveSession] Found historical translations:', historicalTranslations);
+
+        // Add each historical translation to the store if not already present
+        if (Array.isArray(historicalTranslations)) {
+          historicalTranslations.forEach((translation: BackendTranslation) => {
+            const message: TranslationMessage = {
+              type: 'translation',
+              content_type: translation.content_type || 'speech',
+              source_text: translation.source_text,
+              target_text: translation.target_text,
+              confidence: translation.confidence,
+              timestamp: translation.timestamp || translation.created_at,
+            };
+            addTranslation(sessionId, message);
+          });
+          console.log('[LiveSession] ✓ Loaded', historicalTranslations.length, 'historical translations');
+        }
+      } catch (error: unknown) {
+        console.error('[LiveSession] Failed to load historical translations:', error);
+        // Don't show error to user for this, as it's not critical
+      }
+    };
+
+    loadHistoricalTranslations();
+
+    // Initialize WebSocket client
+    const client = new TranslationClient({
+      sessionId,
+      onTranslation: (message: TranslationMessage) => {
+        // Add translation to store so it persists across navigation
+        addTranslation(sessionId, message);
+      },
+      onStatus: (message: TranslationMessage) => {
+        if (message.active_clients !== undefined) {
+          setActiveClients(message.active_clients);
+        }
+      },
+      onError: (error: string) => {
+        setError(error);
+        console.error('[LiveSession] Error:', error);
+      },
+      onConnectionChange: (connected: boolean) => {
+        setConnected(connected);
+        if (!connected) {
+          setStreaming(false);
+        }
+      },
+      onSongStarted: (message: TranslationMessage) => {
+        console.log('[LiveSession] Song started event received:', {
+          song_id: message.song_id,
+          song_title: message.song_title,
+          song_title_en: message.song_title_en,
+          sections_count: message.sections?.length,
+          sections: message.sections,
+        });
+        if (message.song_id && message.song_title && message.sections && message.sections.length > 0) {
+          setActiveSong(sessionId, {
+            song_id: message.song_id,
+            song_title: message.song_title,
+            song_title_en: message.song_title_en || message.song_title,
+            sections: message.sections,
+          });
+        }
+      },
+      onSongEnded: () => {
+        console.log('[LiveSession] Song ended, hiding lyrics overlay');
+        setActiveSong(sessionId, null);
+      },
+    });
+
+    clientRef.current = client;
+
+    // Verify session exists and connect to WebSocket
+    const connectWithRetry = async () => {
+      try {
+        console.log('[LiveSession] Verifying session exists in backend...');
+
+        // First verify session exists in backend
+        const backendSession = await api.getSession(sessionId);
+        console.log('[LiveSession] ✓ Session verified in backend:', backendSession);
+
+        // Small delay to ensure DB commit is complete
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Now connect to WebSocket
+        console.log('[LiveSession] Connecting to WebSocket...');
+        await client.connect();
+        console.log('[LiveSession] ✓ WebSocket connected successfully');
+      } catch (error: unknown) {
+        console.error('[LiveSession] Failed to connect:', error);
+        setError(`Failed to connect: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    };
+
+    connectWithRetry();
+
+    // Cleanup on unmount
+    return () => {
+      console.log('[LiveSession] Cleaning up and disconnecting...');
+      client.disconnect();
+    };
+  }, [sessionId]);
+
+  // Warn user before navigating away while streaming
+  useEffect(() => {
+    if (!streaming) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [streaming]);
+
+  const handleStartStreaming = async () => {
+    if (!clientRef.current || !connected || isStartingAudio) return;
+
+    setIsStartingAudio(true);
+    try {
+      await clientRef.current.startAudioCapture(deviceId);
+      setStreaming(true);
+      setError(null);
+    } catch (error: unknown) {
+      setError(`Failed to start audio: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsStartingAudio(false);
+    }
+  };
+
+  const handleStopStreaming = () => {
+    if (!clientRef.current) return;
+
+    clientRef.current.stopAudioCapture();
+    setStreaming(false);
+  };
+
+  const updateSession = useStore((state) => state.updateSession);
+
+  const handleStopSession = async () => {
+    if (isStopping) return;
+    setIsStopping(true);
+
+    try {
+      // Stop audio and disconnect WebSocket
+      if (clientRef.current) {
+        clientRef.current.stopAudioCapture();
+        clientRef.current.disconnect();
+      }
+      // End session on the backend
+      await api.stopSession(sessionId);
+      // Update store so session shows as ended
+      updateSession(sessionId, { status: 'ended' });
+    } catch (err) {
+      console.error('[LiveSession] Failed to stop session on backend:', err);
+      setError(`Failed to stop session: ${err instanceof Error ? err.message : String(err)}`);
+      setIsStopping(false);
+      return;
+    }
+    router.push('/sessions');
+  };
+
+  return (
+    <div className="max-w-5xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <Link href="/sessions" className="text-blue-600 hover:underline">
+          &larr; Back to Sessions
+        </Link>
+        <button
+          className="bg-red-600 text-white px-6 py-2 rounded shadow hover:bg-red-700 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+          onClick={handleStopSession}
+          disabled={isStopping}
+        >
+          {isStopping ? 'Stopping...' : 'Stop Session'}
+        </button>
+      </div>
+
+      {/* Session Info */}
+      <div>
+        <h1 className="text-3xl font-extrabold text-gray-900">{sessionName}</h1>
+        <div className="flex items-center gap-4 mt-2 text-sm">
+          <span className={`font-bold ${connected ? 'text-green-600' : 'text-gray-400'}`}>
+            {connected ? '● Connected' : '○ Disconnected'}
+          </span>
+          {streaming && <span className="text-red-600 font-bold">● Streaming Audio</span>}
+          <span className="text-gray-500">Started: {new Date(startedAt).toLocaleString()}</span>
+          <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-semibold">
+            {LANGUAGE_LABELS[sourceLanguage] || sourceLanguage} &rarr; {LANGUAGE_LABELS[targetLanguage] || targetLanguage}
+          </span>
+        </div>
+      </div>
+
+      {/* Error Alert */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded p-4 text-red-800">
+          <strong>Error:</strong> {error}
+        </div>
+      )}
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center">
+          <div className="text-4xl font-bold text-gray-900">{activeClients}</div>
+          <div className="text-gray-500 mt-1">Connected Users</div>
+        </div>
+        <div className="bg-white rounded-lg shadow p-6 flex flex-col items-center">
+          <div className="text-4xl font-bold text-gray-900">{translations.length}</div>
+          <div className="text-gray-500 mt-1">Translations</div>
+        </div>
+      </div>
+
+      {/* Audio Controls */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <h2 className="text-lg font-semibold mb-4">Audio Stream Controls</h2>
+        <div className="flex items-center gap-4">
+          {!streaming ? (
+            <button
+              onClick={handleStartStreaming}
+              disabled={!connected || isStartingAudio}
+              className={`px-6 py-3 rounded-lg font-semibold ${
+                connected && !isStartingAudio
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
+            >
+              {isStartingAudio ? 'Starting...' : 'Start Streaming Audio'}
+            </button>
+          ) : (
+            <button
+              onClick={handleStopStreaming}
+              className="px-6 py-3 rounded-lg font-semibold bg-yellow-600 text-white hover:bg-yellow-700"
+            >
+              Pause Streaming
+            </button>
+          )}
+          <div className="text-sm text-gray-500">
+            {connected ? 'Ready to stream' : 'Connecting to server...'}
+          </div>
+        </div>
+      </div>
+
+      {/* QR Code */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <h2 className="text-lg font-semibold mb-4">Mobile App Join Code</h2>
+        <div className="flex items-center gap-6">
+          <div className="p-2 bg-white border rounded">
+            <QRCodeSVG value={`${typeof window !== 'undefined' ? window.location.origin : ''}/watch/${sessionId}`} size={152} />
+          </div>
+          <div>
+            <p className="text-sm text-gray-600 mb-2">
+              Scan to follow along in your language on your phone.
+            </p>
+            <p className="text-xs text-gray-500 font-mono bg-gray-100 px-3 py-2 rounded break-all">
+              {typeof window !== 'undefined' ? window.location.origin : ''}/watch/{sessionId}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Song Lyrics Overlay - Shows when song is active */}
+      {activeSong && (
+        <div className="bg-gradient-to-br from-blue-900 to-purple-900 rounded-lg shadow-2xl p-8 text-white">
+          <div className="text-center mb-8">
+            <div className="text-sm text-blue-200 uppercase tracking-wide mb-2">Now Playing</div>
+            <h2 className="text-3xl font-bold mb-1">{activeSong.song_title_en}</h2>
+            <div className="text-lg text-blue-300">{activeSong.song_title}</div>
+          </div>
+
+          <div className="max-h-[600px] overflow-y-auto space-y-6">
+            {/* Display sections */}
+            {[...activeSong.sections]
+              .sort((a, b) => a.section_number - b.section_number)
+              .map((section, index) => (
+                <div key={`section-${section.section_number}-${index}`} className="mb-6">
+                  <div className="text-sm font-semibold text-blue-300 mb-3 uppercase tracking-wide">
+                    {section.section_name}
+                  </div>
+                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                    <div className="text-xl leading-relaxed whitespace-pre-wrap">
+                      {section.text_target || section.text_source}
+                    </div>
+                    {section.text_target && section.text_source && (
+                      <div className="text-sm text-blue-200 mt-3 italic whitespace-pre-wrap">
+                        {section.text_source}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+
+      {/* Translation Feed - Hidden when song is active */}
+      {!activeSong && (
+        <div className="bg-white rounded-lg shadow">
+          <div className="px-6 py-4 border-b">
+            <h2 className="text-lg font-semibold">Live Translation Feed</h2>
+          </div>
+          <div className="divide-y max-h-[500px] overflow-y-auto">
+            {translations.length === 0 ? (
+              <div className="px-6 py-12 text-center text-gray-400">
+                {streaming ? 'Waiting for translations...' : 'Start streaming to see translations here'}
+              </div>
+            ) : (
+              translations.map((translation, index) => (
+              <div key={index} className="px-6 py-4 hover:bg-gray-50 transition-colors">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`px-2 py-1 rounded text-xs font-semibold ${
+                        translation.content_type === 'scripture'
+                          ? 'bg-purple-100 text-purple-700'
+                          : translation.content_type === 'song'
+                          ? 'bg-blue-100 text-blue-700'
+                          : 'bg-gray-100 text-gray-700'
+                      }`}
+                    >
+                      {translation.content_type || 'speech'}
+                    </span>
+                    {translation.confidence !== undefined && (
+                      <span className="text-xs text-gray-500">
+                        {(translation.confidence * 100).toFixed(2)}% confidence
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-xs text-gray-400">
+                    {translation.timestamp
+                      ? new Date(translation.timestamp).toLocaleTimeString()
+                      : new Date().toLocaleTimeString()}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <div className="text-xs text-gray-500 mb-1">{LANGUAGE_LABELS[sourceLanguage] || sourceLanguage}</div>
+                    <div className="text-gray-900">{translation.source_text}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500 mb-1">{LANGUAGE_LABELS[targetLanguage] || targetLanguage}</div>
+                    <div className="text-gray-900">{translation.target_text}</div>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+      )}
+    </div>
+  );
+}
