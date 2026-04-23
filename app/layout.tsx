@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Church Translator Admin",
+  title: "VerbBridge Admin",
   description: "Admin dashboard for live translation sessions",
 };
 
