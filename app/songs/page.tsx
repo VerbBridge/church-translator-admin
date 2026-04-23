@@ -27,7 +27,7 @@ export default function SongsPage() {
 
   useEffect(() => {
     api.proPresenterStatus()
-      .then((s: any) => setPpStatus(s))
+      .then((s) => setPpStatus(s as PPStatus))
       .catch(() => {});
   }, []);
 

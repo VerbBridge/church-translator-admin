@@ -54,6 +54,7 @@ export function getChurchId(): number {
 	return 1;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function apiRequest<T = any>(
 	path: string,
 	options: RequestInit = {},

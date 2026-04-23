@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { api, getChurchId, API_BASE_URL } from "@/lib/api";
+import { api, getChurchId } from "@/lib/api";
 
 interface PPStatus {
   feature_enabled: boolean;
@@ -19,7 +19,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     api.proPresenterStatus()
-      .then((s: any) => setPpStatus(s))
+      .then((s) => setPpStatus(s as PPStatus))
       .catch(() => {});
   }, []);
 
@@ -45,12 +45,13 @@ export default function SettingsPage() {
   useEffect(() => {
     const churchId = getChurchId();
     api.getChurch(churchId)
-      .then((church: any) => {
+      .then((church) => {
+        const c = church as Record<string, string>;
         setForm({
-          bible_version_source: church.bible_version_source || "RV1960",
-          bible_version_target: church.bible_version_target || "KJV",
-          source_language: church.source_language || "es",
-          target_language: church.target_language || "en",
+          bible_version_source: c.bible_version_source || "RV1960",
+          bible_version_target: c.bible_version_target || "KJV",
+          source_language: c.source_language || "es",
+          target_language: c.target_language || "en",
         });
       })
       .catch(() => {}); // silently fail — form has sensible defaults
@@ -70,8 +71,8 @@ export default function SettingsPage() {
       await api.saveChurchSettings(getChurchId(), form);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch (err: any) {
-      setError(err.message || "Failed to save settings");
+    } catch (err: unknown) {
+      setError((err as Error).message || "Failed to save settings");
     } finally {
       setSaving(false);
     }

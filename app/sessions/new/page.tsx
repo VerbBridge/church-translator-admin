@@ -59,10 +59,10 @@ export default function NewSessionPage() {
       <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded text-sm text-blue-900">
         <strong>Audio Setup Instructions:</strong>
         <ol className="list-decimal ml-5 mt-2 space-y-1">
-          <li>Connect your church audio mixer's output (e.g., XLR, 1/4" TRS, or RCA) to a USB audio interface.</li>
+          <li>Connect your church audio mixer&apos;s output (e.g., XLR, 1/4&quot; TRS, or RCA) to a USB audio interface.</li>
           <li>Plug the USB audio interface into this computer.</li>
           <li>Allow browser microphone access if prompted.</li>
-          <li>Select the USB audio interface from the "Audio Input Device" dropdown below.</li>
+          <li>Select the USB audio interface from the &quot;Audio Input Device&quot; dropdown below.</li>
         </ol>
         <div className="mt-2 text-xs text-blue-700">Need help? Ask your tech team or see the user guide.</div>
       </div>

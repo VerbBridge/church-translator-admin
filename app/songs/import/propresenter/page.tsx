@@ -41,18 +41,20 @@ export default function ImportFromProPresenterPage() {
 
   useEffect(() => {
     api.proPresenterStatus()
-      .then((s: any) => {
-        setFeatureEnabled(s.feature_enabled);
-        setBridgeConnected(s.bridge_connected);
-        if (!s.feature_enabled) router.replace("/songs");
-        if (s.bridge_connected) loadLibraries();
+      .then((s) => {
+        const status = s as { feature_enabled: boolean; bridge_connected: boolean };
+        setFeatureEnabled(status.feature_enabled);
+        setBridgeConnected(status.bridge_connected);
+        if (!status.feature_enabled) router.replace("/songs");
+        if (status.bridge_connected) loadLibraries();
       })
       .catch(() => router.replace("/songs"));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function loadLibraries() {
     try {
-      const data: any = await api.proPresenterLibraries();
+      const data = await api.proPresenterLibraries() as { libraries: Library[] };
       setLibraries(data.libraries || []);
       if (data.libraries?.length === 1) {
         setSelectedLib(data.libraries[0].id);
@@ -66,7 +68,7 @@ export default function ImportFromProPresenterPage() {
     setPresentations([]);
     setSelectedPres(null);
     try {
-      const data: any = await api.proPresenterLibrary(libId);
+      const data = await api.proPresenterLibrary(libId) as { presentations: Presentation[] };
       setPresentations(data.presentations || []);
     } catch {}
   }
@@ -81,7 +83,7 @@ export default function ImportFromProPresenterPage() {
     if (!selectedPres) return;
     setFetchingLyrics(true);
     try {
-      const data: any = await api.proPresenterPresentation(selectedPres.uuid);
+      const data = await api.proPresenterPresentation(selectedPres.uuid) as { slide_text: string[] };
       const texts: string[] = data.slide_text || [];
       if (texts.length > 0) {
         setSections(texts.map((t, i) => ({
@@ -132,8 +134,8 @@ export default function ImportFromProPresenterPage() {
       });
       await api.rebuildSongIndex();
       router.push("/songs");
-    } catch (err: any) {
-      setError(err.message || "Import failed");
+    } catch (err: unknown) {
+      setError((err as Error).message || "Import failed");
     } finally {
       setImporting(false);
     }
