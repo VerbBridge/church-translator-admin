@@ -35,8 +35,6 @@ export default function SettingsPage() {
   const [form, setForm] = useState({
     bible_version_source: "RV1960",
     bible_version_target: "KJV",
-    source_language: "es",
-    target_language: "en",
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -50,8 +48,6 @@ export default function SettingsPage() {
         setForm({
           bible_version_source: c.bible_version_source || "RV1960",
           bible_version_target: c.bible_version_target || "KJV",
-          source_language: c.source_language || "es",
-          target_language: c.target_language || "en",
         });
       })
       .catch(() => {}); // silently fail — form has sensible defaults
@@ -82,32 +78,6 @@ export default function SettingsPage() {
     <div className="max-w-2xl mx-auto">
       <h1 className="text-2xl font-extrabold text-gray-900 mb-6">Settings</h1>
       <form onSubmit={handleSubmit} className="space-y-8 bg-white rounded shadow p-8">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-base font-bold mb-1 text-gray-900">Source Language</label>
-            <select
-              name="source_language"
-              className="w-full border rounded px-3 py-2 text-gray-900"
-              value={form.source_language}
-              onChange={handleChange}
-            >
-              <option value="es">Spanish</option>
-              <option value="en">English</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-base font-bold mb-1 text-gray-900">Target Language</label>
-            <select
-              name="target_language"
-              className="w-full border rounded px-3 py-2 text-gray-900"
-              value={form.target_language}
-              onChange={handleChange}
-            >
-              <option value="en">English</option>
-              <option value="es">Spanish</option>
-            </select>
-          </div>
-        </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-base font-bold mb-1 text-gray-900">Bible Version (Source)</label>
