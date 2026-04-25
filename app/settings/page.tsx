@@ -146,7 +146,7 @@ export default function SettingsPage() {
 
           <div className="flex flex-wrap gap-3 mt-4">
             <a
-              href="https://github.com/VerbBridge/church-translator-backend/releases/latest/download/VerbBridge-Bridge.exe"
+              href={api.proPresenterDownloadBridgeUrl(getChurchId())}
               className="bg-purple-600 text-white px-4 py-2 rounded shadow hover:bg-purple-700 transition font-semibold text-sm"
             >
               Download Bridge App (.exe)
