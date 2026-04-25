@@ -16,6 +16,8 @@ export default function SettingsPage() {
   const [ppHost, setPpHost] = useState("localhost");
   const [ppPort, setPpPort] = useState(50001);
   const [ppSaving, setPpSaving] = useState(false);
+  const [ppCode, setPpCode] = useState<string | null>(null);
+  const [ppCodeCopied, setPpCodeCopied] = useState(false);
 
   useEffect(() => {
     api.proPresenterStatus()
@@ -144,20 +146,40 @@ export default function SettingsPage() {
 
           <div className="flex flex-wrap gap-3 mt-4">
             <a
-              href={api.proPresenterDownloadBridgeUrl(getChurchId())}
-              download="propresenter_bridge.py"
+              href="https://github.com/VerbBridge/church-translator-backend/releases/latest/download/VerbBridge-Bridge.exe"
               className="bg-purple-600 text-white px-4 py-2 rounded shadow hover:bg-purple-700 transition font-semibold text-sm"
-              title="Pre-configured for this church — just run it on the ProPresenter computer"
             >
-              Download Bridge App
+              Download Bridge App (.exe)
             </a>
             <button
+              onClick={async () => {
+                if (!ppCode) {
+                  const code = await api.proPresenterConnectionCode(getChurchId());
+                  setPpCode(code);
+                }
+              }}
+              className="bg-gray-700 text-white px-4 py-2 rounded shadow hover:bg-gray-800 transition font-semibold text-sm"
+            >
+              {ppCode ? "Connection Code" : "Show Connection Code"}
+            </button>
+            <button
               onClick={() => setPpAdvanced(v => !v)}
-              className="text-gray-500 hover:text-gray-700 text-sm underline"
+              className="text-gray-500 hover:text-gray-700 text-sm underline self-center"
             >
               {ppAdvanced ? "Hide" : "Advanced"} settings
             </button>
           </div>
+          {ppCode && (
+            <div className="mt-3 bg-gray-50 border rounded p-3 flex items-center gap-3">
+              <code className="text-xs text-gray-700 break-all flex-1">{ppCode}</code>
+              <button
+                onClick={() => { navigator.clipboard.writeText(ppCode); setPpCodeCopied(true); setTimeout(() => setPpCodeCopied(false), 2000); }}
+                className="text-xs px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 font-semibold shrink-0"
+              >
+                {ppCodeCopied ? "Copied!" : "Copy"}
+              </button>
+            </div>
+          )}
 
           {ppAdvanced && (
             <form onSubmit={savePpSettings} className="mt-4 flex flex-wrap items-end gap-3">
@@ -195,10 +217,10 @@ export default function SettingsPage() {
               How to set up
             </summary>
             <ol className="mt-2 text-sm text-gray-600 space-y-1 list-decimal list-inside">
-              <li>Click <strong>Download Bridge App</strong> above.</li>
-              <li>Copy the downloaded file to the computer running ProPresenter.</li>
-              <li>Run it: <code className="bg-gray-100 px-1 rounded">python propresenter_bridge.py</code></li>
-              <li>A setup dialog will appear — paste the connection code shown there (already embedded in the file).</li>
+              <li>Click <strong>Download Bridge App (.exe)</strong> and copy it to the ProPresenter computer.</li>
+              <li>Run <strong>VerbBridge-Bridge.exe</strong> — it will appear in the system tray.</li>
+              <li>On first launch, a dialog asks for your connection code.</li>
+              <li>Click <strong>Show Connection Code</strong> above, copy it, and paste it into the dialog.</li>
               <li>The tray icon turns green when connected.</li>
             </ol>
           </details>

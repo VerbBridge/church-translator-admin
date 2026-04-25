@@ -311,6 +311,10 @@ export const api = {
 		const token = getToken() || "";
 		return `${API_BASE_URL}/api/propresenter/download-bridge/${churchId}?token=${encodeURIComponent(token)}`;
 	},
+	async proPresenterConnectionCode(churchId: number): Promise<string> {
+		const data = await apiRequest<{ connection_code: string }>(`/api/propresenter/connection-code/${churchId}`);
+		return data.connection_code;
+	},
 
 	// Church Settings
 	async getChurch(churchId: number) {
