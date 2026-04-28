@@ -197,6 +197,16 @@ export const api = {
 		return apiRequest("/api/auth/me", { method: "GET" });
 	},
 
+	// Health / model status (no auth required)
+	async getHealth() {
+		return apiRequest<{
+			status: string;
+			models_ready: boolean;
+			models: Record<string, boolean>;
+			active_sessions: number;
+		}>("/health", { method: "GET" }, false);
+	},
+
 	// Sessions
 	async getSessions() {
 		return apiRequest("/api/sessions", { method: "GET" });

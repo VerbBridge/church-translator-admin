@@ -41,6 +41,8 @@ export function LiveSession({ sessionId, sessionName, deviceId, startedAt, sourc
   const [error, setError] = useState<string | null>(null);
   const [isStopping, setIsStopping] = useState(false);
   const [isStartingAudio, setIsStartingAudio] = useState(false);
+  const [modelsReady, setModelsReady] = useState(false);
+  const [modelStatus, setModelStatus] = useState<Record<string, boolean> | null>(null);
 
   // Get translations from store instead of local state
   const session = useStore((state) => state.sessions.find((s) => s.id === sessionId));
@@ -161,6 +163,26 @@ export function LiveSession({ sessionId, sessionName, deviceId, startedAt, sourc
     };
   }, [sessionId]);
 
+  // Poll /health until all critical models are loaded, then stop
+  useEffect(() => {
+    let stopped = false;
+    const poll = async () => {
+      try {
+        const health = await api.getHealth();
+        if (stopped) return;
+        setModelStatus(health.models);
+        setModelsReady(health.models_ready);
+        if (!health.models_ready) {
+          setTimeout(poll, 3000);
+        }
+      } catch {
+        if (!stopped) setTimeout(poll, 5000);
+      }
+    };
+    poll();
+    return () => { stopped = true; };
+  }, []);
+
   // Warn user before navigating away while streaming
   useEffect(() => {
     if (!streaming) return;
@@ -275,9 +297,9 @@ export function LiveSession({ sessionId, sessionName, deviceId, startedAt, sourc
           {!streaming ? (
             <button
               onClick={handleStartStreaming}
-              disabled={!connected || isStartingAudio}
+              disabled={!connected || isStartingAudio || !modelsReady}
               className={`px-6 py-3 rounded-lg font-semibold ${
-                connected && !isStartingAudio
+                connected && !isStartingAudio && modelsReady
                   ? 'bg-green-600 text-white hover:bg-green-700'
                   : 'bg-gray-300 text-gray-500 cursor-not-allowed'
               }`}
@@ -293,9 +315,33 @@ export function LiveSession({ sessionId, sessionName, deviceId, startedAt, sourc
             </button>
           )}
           <div className="text-sm text-gray-500">
-            {connected ? 'Ready to stream' : 'Connecting to server...'}
+            {!connected
+              ? 'Connecting to server...'
+              : !modelsReady
+              ? 'Waiting for ML models to load...'
+              : 'Ready to stream'}
           </div>
         </div>
+
+        {/* Model loading status */}
+        {!modelsReady && modelStatus && (
+          <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <p className="text-sm font-semibold text-yellow-800 mb-2">ML Models Loading...</p>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-yellow-700">
+              {Object.entries(modelStatus).map(([name, loaded]) => (
+                <div key={name} className="flex items-center gap-1.5">
+                  <span>{loaded ? '✓' : '⏳'}</span>
+                  <span className={loaded ? 'text-green-700' : ''}>{name.replace(/_/g, ' ')}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {modelsReady && modelStatus && (
+          <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+            <p className="text-sm font-semibold text-green-800">All ML models loaded</p>
+          </div>
+        )}
       </div>
 
       {/* QR Code */}
