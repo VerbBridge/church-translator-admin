@@ -26,6 +26,7 @@ export class TranslationClient {
   private maxReconnectAttempts = 5;
   private reconnectDelay = 2000;
   private pingInterval: NodeJS.Timeout | null = null;
+  private intentionalDisconnect = false;
 
   constructor(config: TranslationClientConfig) {
     this.config = config;
@@ -94,8 +95,8 @@ export class TranslationClient {
           this.config.onConnectionChange?.(false);
           this.stopPingInterval();
 
-          // Attempt reconnection only for recoverable errors
-          if (this.reconnectAttempts < this.maxReconnectAttempts && event.code !== 1008) {
+          // Attempt reconnection only for recoverable errors (not intentional disconnects)
+          if (!this.intentionalDisconnect && this.reconnectAttempts < this.maxReconnectAttempts && event.code !== 1008) {
             this.reconnectAttempts++;
             console.log(`[TranslationClient] Reconnecting (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
             setTimeout(() => this.connect(), this.reconnectDelay);
@@ -301,6 +302,7 @@ export class TranslationClient {
   disconnect(): void {
     console.log('[TranslationClient] Disconnecting');
 
+    this.intentionalDisconnect = true;
     this.stopAudioCapture();
     this.stopPingInterval();
 
