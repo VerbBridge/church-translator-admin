@@ -95,6 +95,9 @@ export function LiveSession({ sessionId, sessionName, deviceId, startedAt, sourc
         if (message.active_clients !== undefined) {
           setActiveClients(message.active_clients);
         }
+        if (message.count !== undefined) {
+          setActiveClients(message.count);
+        }
       },
       onError: (error: string) => {
         setError(error);

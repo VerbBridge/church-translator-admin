@@ -142,6 +142,10 @@ export class TranslationClient {
         console.log('[TranslationClient] Song ended:', message.song_id, message.reason);
         this.config.onSongEnded?.(message);
         break;
+      case 'viewer_count':
+      case 'connected_users':
+        this.config.onStatus?.(message);
+        break;
       default:
         console.warn('[TranslationClient] Unknown message type:', message);
     }
