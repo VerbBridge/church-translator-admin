@@ -11,6 +11,7 @@ interface BackendSession {
   ended_at?: string | null;
   source_language?: string;
   target_language?: string;
+  connected_users?: number;
 }
 
 // Song section format
@@ -77,7 +78,7 @@ export function mapBackendSession(backendSession: BackendSession, deviceId?: str
     status: backendSession.status,
     startedAt: backendSession.started_at,
     endedAt: backendSession.ended_at || undefined,
-    connectedUsers: 0, // Not provided by backend yet
+    connectedUsers: backendSession.connected_users ?? 0,
     translationCount: 0, // Not provided by backend yet
     sourceLanguage: backendSession.source_language || 'es',
     targetLanguage: backendSession.target_language || 'en',
