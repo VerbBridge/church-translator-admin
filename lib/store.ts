@@ -103,6 +103,7 @@ interface Store {
   updateSession: (id: string, updates: Partial<Session>) => void;
   setSessions: (sessions: Session[]) => void;
   addTranslation: (sessionId: string, translation: TranslationMessage) => void;
+  setTranslations: (sessionId: string, translations: TranslationMessage[]) => void;
   setActiveSong: (sessionId: string, song: ActiveSong | null) => void;
 
   // Songs
@@ -136,6 +137,15 @@ export const useStore = create<Store>((set: (partial: Partial<Store> | ((state: 
               translations: [translation, ...(s.translations || [])].slice(0, 100), // Keep last 100
               translationCount: (s.translations?.length || 0) + 1,
             }
+          : s
+      ),
+    })),
+
+  setTranslations: (sessionId: string, translations: TranslationMessage[]) =>
+    set((state: Store) => ({
+      sessions: state.sessions.map((s: Session) =>
+        s.id === sessionId
+          ? { ...s, translations, translationCount: translations.length }
           : s
       ),
     })),

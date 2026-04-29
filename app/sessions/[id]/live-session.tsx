@@ -48,6 +48,7 @@ export function LiveSession({ sessionId, sessionName, deviceId, startedAt, sourc
   const session = useStore((state) => state.sessions.find((s) => s.id === sessionId));
   const translations = session?.translations || [];
   const addTranslation = useStore((state) => state.addTranslation);
+  const setTranslations = useStore((state) => state.setTranslations);
   const setActiveSong = useStore((state) => state.setActiveSong);
   const activeSong = session?.activeSong;
 
@@ -62,20 +63,18 @@ export function LiveSession({ sessionId, sessionName, deviceId, startedAt, sourc
         const historicalTranslations = await api.getSessionTranslations(sessionId);
         console.log('[LiveSession] Found historical translations:', historicalTranslations);
 
-        // Add each historical translation to the store if not already present
         if (Array.isArray(historicalTranslations)) {
-          historicalTranslations.forEach((translation: BackendTranslation) => {
-            const message: TranslationMessage = {
-              type: 'translation',
-              content_type: translation.content_type || 'speech',
-              source_text: translation.source_text,
-              target_text: translation.target_text,
-              confidence: translation.confidence,
-              timestamp: translation.timestamp || translation.created_at,
-            };
-            addTranslation(sessionId, message);
-          });
-          console.log('[LiveSession] ✓ Loaded', historicalTranslations.length, 'historical translations');
+          const messages: TranslationMessage[] = historicalTranslations.map((translation: BackendTranslation) => ({
+            type: 'translation',
+            content_type: translation.content_type || 'speech',
+            source_text: translation.source_text,
+            target_text: translation.target_text,
+            confidence: translation.confidence,
+            timestamp: translation.timestamp || translation.created_at,
+          }));
+          // Replace (not append) so re-entering the session never duplicates history
+          setTranslations(sessionId, messages.reverse()); // newest first to match addTranslation order
+          console.log('[LiveSession] ✓ Loaded', messages.length, 'historical translations');
         }
       } catch (error: unknown) {
         console.error('[LiveSession] Failed to load historical translations:', error);
