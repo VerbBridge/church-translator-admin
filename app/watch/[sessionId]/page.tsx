@@ -128,13 +128,13 @@ export default function WatchPage() {
           if (msg.type === "history" && Array.isArray(msg.translations)) {
             const entries: Translation[] = msg.translations.map((t: {
               source_text: string;
-              translated_text: string;
+              target_text: string;
               content_type: string;
               timestamp: string;
             }) => ({
               id: ++idCounter.current,
               source_text: t.source_text || "",
-              target_text: t.translated_text,
+              target_text: t.target_text,
               content_type: (t.content_type as Translation["content_type"]) || "speech",
               timestamp: t.timestamp,
             }));
